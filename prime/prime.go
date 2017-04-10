@@ -1,4 +1,4 @@
-package pnbot
+package prime
 
 import (
     "fmt"
