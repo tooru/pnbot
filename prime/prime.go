@@ -4,6 +4,8 @@ import (
     "fmt"
     "math/big"
     "sync"
+
+    "github.com/boltdb/bolt"
 )
 
 var big0 = big.NewInt(0)
@@ -12,6 +14,14 @@ var big3 = big.NewInt(3)
 
 var primes = []*big.Int{big2, big3}
 var pMutex = new(sync.Mutex)
+
+// db format
+//  "nSuccession": bytes of big.Int
+//  "succession": Bucket
+//    big.Int: 1
+//  "noSuccession": Bucket
+//    big.Int: 0,1
+var db bolt.DB
 
 type Primes struct {
     i int // TODO more scalable
