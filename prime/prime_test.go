@@ -106,13 +106,16 @@ func TestIsPrime(t *testing.T) {
     isPrime(t, true,  big.NewInt(97))
     isPrime(t, false, big.NewInt(98))
     isPrime(t, false, big.NewInt(99))
+
+    isPrime(t, true, big.NewInt(1098481))
+    // isPrime(t, false, big.NewInt(1134211291487)) // 1098481 * 1032527
 }
 
 func isPrime(t *testing.T, expect bool, n *big.Int) {
     b, err := IsPrime(n)
 
-    if err != nil {
-        assert.Fail(t, "error: isPrime(%v): %v", n, err)
+    if _, ok := err.(error); ok {
+        assert.Fail(t, "error: isPrime: %v", err)
     }
 
     assert.Equal(t, expect, b)
