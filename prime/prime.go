@@ -162,14 +162,14 @@ func (pdb *primeDB) nSuccession() (nSucc *big.Int, err error) {
 }
 
 func (pdb *primeDB) isPrime(n *big.Int) (result string, err error) {
-    err = updatePDB(func(tx *bolt.Tx) error {
+   err = updatePDB(func(tx *bolt.Tx) error {
         primes := tx.Bucket([]byte("primes"))
         next := primes.Get(n.Bytes())
         if next != nil{
             result = "prime"
             return nil
         }
-        
+
         noSuccession := tx.Bucket([]byte("noSuccession"))
         num := noSuccession.Get(n.Bytes())
 
@@ -356,40 +356,46 @@ func (pdb *primeDB) nextPrime(prime *big.Int) (next *big.Int, err error) {
 //  "noSuccession": Bucket
 //    big.Int: 0,1
 
-func updatePDB(fn func(*bolt.Tx) error) error {
-    db, err := bolt.Open("prime.db", 0600, nil)
+var boltDB *bolt.DB
+
+func updatePDB(fn func(*bolt.Tx) error) (err error) {
+    if boltDB != nil {
+        return boltDB.Update(func(tx *bolt.Tx) error {
+            return fn(tx)
+        })
+    }
+
+    boltDB, err = bolt.Open("prime.db", 0600, nil)
     if err != nil {
         return err
     }
-    defer func() {
-        db.Close()
-        db = nil
-    }()
 
-    return db.Update(func(tx *bolt.Tx) error {
+    return boltDB.Update(func(tx *bolt.Tx) error {
         prop := tx.Bucket([]byte("prop"))
-        if prop == nil {
-            prop, err := tx.CreateBucket([]byte("prop"))
-            if err != nil {
-                panic("") //return err
-            }
-            prop.Put([]byte("nSuccession"), big2.Bytes())
-            prop.Put([]byte("maxSuccPrime"), big3.Bytes())
-            prop.Put([]byte("maxSuccNoPrime"), big.NewInt(4).Bytes())
+        if prop != nil {
+            return fn(tx)
+        }
 
-            primes, err := tx.CreateBucket([]byte("primes"))
-            if err != nil {
-                panic("") //return err
-            }
-            err = primes.Put(big2.Bytes(), big3.Bytes());
-            if err != nil {
-                panic("") //return err
-            }
+        prop, err = tx.CreateBucket([]byte("prop"))
+        if err != nil {
+            panic("") //return err
+        }
+        prop.Put([]byte("nSuccession"), big2.Bytes())
+        prop.Put([]byte("maxSuccPrime"), big3.Bytes())
+        prop.Put([]byte("maxSuccNoPrime"), big.NewInt(4).Bytes())
 
-            _, err = tx.CreateBucket([]byte("noSuccession"))
-            if err != nil {
-                panic("") //return err
-            }
+        primes, err := tx.CreateBucket([]byte("primes"))
+        if err != nil {
+            panic("") //return err
+        }
+        err = primes.Put(big2.Bytes(), big3.Bytes());
+        if err != nil {
+            panic("") //return err
+        }
+
+        _, err = tx.CreateBucket([]byte("noSuccession"))
+        if err != nil {
+            panic("") //return err
         }
         return fn(tx)
     })
