@@ -121,3 +121,6 @@ func isPrime(t *testing.T, expect bool, n *big.Int) {
 
     assert.Equal(t, expect, b)
 }
+
+// 2a101fc  0.418s // full onmemory
+// 892e8ab 15.272s // boltDB / no cache
