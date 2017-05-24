@@ -139,6 +139,6 @@ func tweetPrimes(client *twitter.Client, config *oauth1.Config, token *oauth1.To
             continue
         }
         log.Printf("tweet %s\n", text)
-        time.Sleep(1 * time.Minute)
+        time.Sleep(15 * time.Second)
     }
 }
