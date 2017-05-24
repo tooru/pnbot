@@ -130,6 +130,7 @@ func tweetPrimes(client *twitter.Client, ch chan *big.Int) {
             }
             log.Printf("Tweet error: %v\n", err)
             time.Sleep(10 * time.Minute)
+            retry++
             continue
         }
         log.Printf("tweet %s\n", text)
