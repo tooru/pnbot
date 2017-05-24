@@ -13,7 +13,7 @@ import (
 )
 
 const (
-    queueSize = 200000
+    queueSize = 10
     maxRetry = 10
 )
 
