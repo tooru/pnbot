@@ -12,6 +12,11 @@ import (
     "github.com/dghubble/oauth1"
 )
 
+const (
+    queueSize = 100000
+    maxRetry = 10
+)
+
 func main() {
     log.SetFlags(log.Ldate | log.Ltime | log.Llongfile)
 
@@ -45,7 +50,7 @@ func pnTweet(client *twitter.Client, primes *prime.Prime) {
         return
     }
 
-    ch := make(chan *big.Int, 1000)
+    ch := make(chan *big.Int, queueSize)
 
     go makePrimes(primes, maxPrime, ch)
     tweetPrimes(client, ch)
@@ -87,6 +92,7 @@ func makePrimes(primes *prime.Prime, maxPrime *big.Int, ch chan *big.Int) {
         if prime.Cmp(maxPrime) > 0 {
             break;
         }
+        log.Printf("makePrimes: skip %v\n", prime)
     }
 
     for {
@@ -110,12 +116,21 @@ func tweetPrimes(client *twitter.Client, ch chan *big.Int) {
         }
 
         text := prime.Text(10)
-        _, _, err := client.Statuses.Update(text, nil)
-        if err != nil {
-            log.Fatalf("Tweet error: %v\n", err)
-            return
+        retry := 0
+        for {
+            _, _, err := client.Statuses.Update(text, nil)
+            if err == nil {
+                break
+            }
+            if retry >= maxRetry {
+                log.Fatalf("Too many tweet error: %v\n", err)
+                return
+            }
+            log.Printf("Tweet error: %v\n", err)
+            time.Sleep(10 * time.Minute)
+            continue
         }
         log.Printf("tweet %s\n", text)
-        time.Sleep(30 * time.Second)
+        time.Sleep(1 * time.Minute)
     }
 }
