@@ -33,17 +33,21 @@ func main() {
 
     config := oauth1.NewConfig(*consumerKey, *consumerSecret)
     token := oauth1.NewToken(*accessToken, *accessSecret)
-
-    httpClient := config.Client(oauth1.NoContext, token)
-    client := twitter.NewClient(httpClient)
-
     
     primes := prime.NewPrime()
 
-    pnTweet(client, primes)
+    pnTweet(config, token, primes)
 }
 
-func pnTweet(client *twitter.Client, primes *prime.Prime) {
+func newClient(config *oauth1.Config, token *oauth1.Token) *twitter.Client {
+    httpClient := config.Client(oauth1.NoContext, token)
+
+    return twitter.NewClient(httpClient)
+}
+
+func pnTweet(config *oauth1.Config, token *oauth1.Token, primes *prime.Prime) {
+    client := newClient(config, token)
+
     maxPrime, err := getMaxPrime(client)
     if err != nil {
         log.Fatalf("getMaxPrime: %v\n", err)
@@ -54,7 +58,7 @@ func pnTweet(client *twitter.Client, primes *prime.Prime) {
 
     go makePrimes(primes, maxPrime, ch)
 
-    tweetPrimes(client, ch)
+    tweetPrimes(client, config, token, ch)
 }
 
 func getMaxPrime(client *twitter.Client) (prime *big.Int, err error) {
@@ -109,7 +113,7 @@ func makePrimes(primes *prime.Prime, maxPrime *big.Int, ch chan *big.Int) {
     }
 }
 
-func tweetPrimes(client *twitter.Client, ch chan *big.Int) {
+func tweetPrimes(client *twitter.Client, config *oauth1.Config, token *oauth1.Token, ch chan *big.Int) {
     for {
         prime := <- ch
         if prime == nil {
@@ -129,7 +133,8 @@ func tweetPrimes(client *twitter.Client, ch chan *big.Int) {
                 return
             }
             log.Printf("Tweet error: %v\n", err)
-            time.Sleep(10 * time.Minute)
+            time.Sleep(5 * (time.Duration(retry) + 1) * time.Minute)
+            client = newClient(config, token)
             retry++
             continue
         }
