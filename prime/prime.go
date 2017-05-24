@@ -3,11 +3,10 @@ package prime
 // TODO create db viewer
 
 import (
-    "fmt"
+    //"log"
     "math/big"
+    "sort"
     "sync"
-
-    "github.com/boltdb/bolt"
 )
 
 var big0 = big.NewInt(0)
@@ -18,9 +17,7 @@ var big3 = big.NewInt(3)
 var bTrue  = []byte{byte(1)}
 var bFalse = []byte{byte(0)}
 
-var pdb = new(primeDB)
-
-var pMutex = new(sync.Mutex) // TODO remove?
+var pdb = newPrimeDB()
 
 // error will be IO or timeout
 func IsPrime(n *big.Int) (bool, error) {
@@ -60,11 +57,8 @@ func IsPrime(n *big.Int) (bool, error) {
         }
         m := new(big.Int)
         if m.Mod(n, p).Cmp(big0) == 0 {
-            //fmt.Printf("IsPrime: n %% p == 0: n=%v/r=%v/p=%v\n", n, r, p)
-            pdb.addNotPrime(n)
             return false, nil
         }
-        //fmt.Printf("IsPrime: n %% p != 0: n=%v/r=%v/p=%v\n", n, r, p)
     }
     pdb.addPrime(n)
     return true, nil
@@ -83,9 +77,6 @@ func NewPrime () *Prime {
 }
 
 func (ps *Prime) Next() (next *big.Int, err error) {
-    //pMutex.Lock() // TODO optimize
-    //defer pMutex.Unlock()
-
     //fmt.Printf("Next:%v\n", ps.i)
 
     if ps.cur == nil {
@@ -102,26 +93,18 @@ func (ps *Prime) Next() (next *big.Int, err error) {
         panic("") //return nil, err
     }
 
-    nSuccession, err := pdb.nSuccession()
-    if err != nil {
-        panic("") //return nil, err
-    }
-    
-    if ps.i.Cmp(nSuccession) < 0 {
-        next, err = pdb.nextPrime(ps.cur)
-        if err != nil {
-            return nil, err
-        }
-    }
+    p, err := pdb.nPrime(ps.i)
 
-    if next != nil {
+    if p != nil {
+        ps.cur.Set(p)
         ps.i.Add(ps.i, big1)
-        return next, nil
+        return newInt(p), nil
     }
 
-    p := newInt(ps.cur)
+    p = newInt(ps.cur)
     for {
         p.Add(p, big2)
+        //log.Printf("next?: %v\n", p)
 
         b, err := IsPrime(p)
         if err != nil {
@@ -134,282 +117,126 @@ func (ps *Prime) Next() (next *big.Int, err error) {
 
     //fmt.Printf("Put:%v -> %v\n", ps.cur, p)
     
-    if err := pdb.addPrime(p); err != nil {
+    if err := pdb.addNextPrime(p); err != nil {
         panic("") //return nil, err
     }
     ps.cur = p
     ps.i.Add(ps.i, big1)
   
-    return p, nil
+    return newInt(p), nil
 }
 
 type primeDB struct {
+    mutex sync.Mutex
+
+    primes []*big.Int
+    sparsePrimes []*big.Int
 }
 
-func (pdb *primeDB) nSuccession() (nSucc *big.Int, err error) {
-    err = updatePDB(func(tx *bolt.Tx) error {
-        prop := tx.Bucket([]byte("prop"))
-
-        nSucc = new(big.Int)
-        nSucc.SetBytes(prop.Get([]byte("nSuccession")))
-
-        return nil
-    })
-    if err != nil {
-        return nil, err
+func newPrimeDB() *primeDB {
+    return &primeDB{
+        primes: []*big.Int{
+            big.NewInt(2),
+            big.NewInt(3),
+        },
+        sparsePrimes: []*big.Int{},
     }
-    return nSucc, nil
 }
 
 func (pdb *primeDB) isPrime(n *big.Int) (result string, err error) {
-   err = updatePDB(func(tx *bolt.Tx) error {
-        primes := tx.Bucket([]byte("primes"))
-        next := primes.Get(n.Bytes())
-        if next != nil{
-            result = "prime"
-            return nil
-        }
+    pdb.mutex.Lock()
+    defer pdb.mutex.Unlock()
 
-        noSuccession := tx.Bucket([]byte("noSuccession"))
-        num := noSuccession.Get(n.Bytes())
-
-        if num != nil {
-            if num[0] == 0 {
-                result = "noPrime"
-            } else {
-                result = "prime"
-            }
-        } else {
-            result = "unknown"
-        }
-        return nil
+    i := sort.Search(len(pdb.primes), func(i int) bool {
+        return pdb.primes[i].Cmp(n) >= 0
     })
-    if err != nil {
-        return "", err
+
+    if i == len(pdb.primes) {
+        return "unknown", nil
+    } else if pdb.primes[i].Cmp(n) == 0 {
+        return "prime", nil
+    } else {
+        return "noPrime", nil
     }
-    return result, nil
+}
+
+func (pdb *primeDB) addNextPrime(prime *big.Int) error {
+    pdb.mutex.Lock()
+    defer pdb.mutex.Unlock()
+
+    assertNextPrime(pdb, prime)
+
+    pdb.primes = append(pdb.primes, prime)
+    printSlice(pdb.primes)
+
+    i := sort.Search(len(pdb.sparsePrimes), func(i int) bool {
+        return pdb.sparsePrimes[i].Cmp(prime) >= 0
+    })
+    if i > 0 {
+        pdb.sparsePrimes = pdb.sparsePrimes[i+1:]
+    }
+
+    return nil
+}
+
+func assertNextPrime(pdb *primeDB, next *big.Int) {
+    prev := last(pdb.primes)
+
+    if prev.Cmp(next) >= 0 {
+        panic("")
+        //log.Fatalf("prev: %v next: %v", prev, next)
+    }
+
+    j := new(big.Int)
+    j.Add(prev, big1)
+    for ; j.Cmp(next) < 0; j.Add(j, big1) {
+        //log.Printf(" skip: %v\n", j)
+    }
+
 }
 
 func (pdb *primeDB) addPrime(prime *big.Int) error {
-    err := updatePDB(func(tx *bolt.Tx) error {
-        prop := tx.Bucket([]byte("prop"))
+    pdb.mutex.Lock()
+    defer pdb.mutex.Unlock()
 
-        maxSuccPrime := new(big.Int)
-        maxSuccPrime.SetBytes(prop.Get([]byte("maxSuccPrime")))
-
-        if prime.Cmp(maxSuccPrime) <= 0 {
-            return nil
-        }
-        
-        fmt.Printf("addPrime: %v\n", prime)
-
-        maxSuccNoPrime := new(big.Int)
-        maxSuccNoPrime.SetBytes(prop.Get([]byte("maxSuccNoPrime")))
-
-        primeBytes := prime.Bytes()
-
-        prevPrime := new(big.Int)
-        prevPrime.Sub(prime, big1)
-
-        noSuccession := tx.Bucket([]byte("noSuccession"))
-        if noSuccession == nil {
-            panic("noSuccession is nil")
-        }
-
-        if prevPrime.Cmp(maxSuccNoPrime) > 0 {
-            noSuccession.Put(primeBytes, bTrue)
-            return nil
-        }
-
-        nSuccession := new(big.Int)
-        nSuccession.SetBytes(prop.Get([]byte("nSuccession")))
-        nSuccession.Add(nSuccession, big1)
-
-        primes := tx.Bucket([]byte("primes"))
-        primes.Put(maxSuccPrime.Bytes(), primeBytes)
-
-        maxSuccPrime.Set(prime)
-        maxSuccNoPrime.Add(prime, big1)
-
-        maxSucc := new(big.Int)
-        maxSucc.Add(maxSuccNoPrime, big1)
-
-        for {
-            isPrime := noSuccession.Get(maxSucc.Bytes())
-            if (isPrime == nil) {
-                break;
-            }
-
-            err := noSuccession.Delete(maxSucc.Bytes())
-            if err != nil {
-                return err
-            }
-
-            if (isBytesTrue(isPrime)) {
-                primes.Put(maxSuccPrime.Bytes(), maxSucc.Bytes())
-
-                maxSuccPrime.Set(maxSucc)
-                maxSuccNoPrime.Add(maxSucc, big1)
-                nSuccession.Add(nSuccession, big1)
-            } else {
-                maxSuccNoPrime.Set(maxSucc)
-            }
-        }
-
-        prop.Put([]byte("nSuccession"), nSuccession.Bytes())
-        prop.Put([]byte("maxSuccPrime"), primeBytes)
-        prop.Put([]byte("maxSuccNoPrime"), maxSuccNoPrime.Bytes())
-        
+    if last(pdb.primes).Cmp(prime) >= 0 {
         return nil
-    })
-    if err != nil {
-        return err
     }
+
+    i := sort.Search(len(pdb.sparsePrimes), func(i int) bool {
+        return pdb.sparsePrimes[i].Cmp(prime) >= 0
+    })
+
+    if i == len(pdb.sparsePrimes) {
+        pdb.sparsePrimes = append(pdb.sparsePrimes, prime)
+    } else if pdb.sparsePrimes[i].Cmp(prime) > 0 {
+        pdb.sparsePrimes = append(pdb.sparsePrimes[:i], append([]*big.Int{prime}, pdb.sparsePrimes[i:]...)...)
+    }
+
     return nil
 }
 
-func (pdb *primeDB) addNotPrime(noPrime *big.Int) error {
-    err := updatePDB(func(tx *bolt.Tx) error {
-        prop := tx.Bucket([]byte("prop"))
+func (pdb *primeDB) nPrime(i *big.Int) (prime *big.Int, err error) {
+    pdb.mutex.Lock()
+    defer pdb.mutex.Unlock()
 
-        maxSuccNoPrime := new(big.Int)
-        maxSuccNoPrime.SetBytes(prop.Get([]byte("maxSuccNoPrime")))
+    //defer log.Printf("nPrime %v %v %v\n", i, prime, len(pdb.primes))
 
-        if noPrime.Cmp(maxSuccNoPrime) <= 0 {
-            return nil
-        }
-        fmt.Printf("addNotPrime: %v %v\n", noPrime, maxSuccNoPrime)
-        
-        noPrimeBytes := noPrime.Bytes()
-
-        maxSuccNoPrime.Add(maxSuccNoPrime, big1)
-
-        noSuccession := tx.Bucket([]byte("noSuccession"))
-        if noPrime.Cmp(maxSuccNoPrime) != 0 {
-            noSuccession.Put(noPrimeBytes, bFalse)
-            return nil
-        }
-
-        maxSuccPrime := new(big.Int)
-        maxSuccPrime.SetBytes(prop.Get([]byte("maxSuccPrime")))
-        
-        primes := tx.Bucket([]byte("primes"))
-
-        next := new(big.Int)
-        next.Add(noPrime, big1)
-
-        for {
-            nextBytes := next.Bytes()
-            isPrime := noSuccession.Get(nextBytes)
-            if len(isPrime) == 0 {
-                if noPrime.Bit(0) == 0 {
-                    prop.Put([]byte("maxSuccNoPrime"), noPrimeBytes)
-                } else {
-                    prop.Put([]byte("maxSuccNoPrime"), nextBytes)
-                }
-                return nil
-            }
-
-            err := noSuccession.Delete(nextBytes)
-            if err != nil {
-                return err
-            }
-            if isPrime[0] == 0 {
-                next.Add(next, big1)
-                prop.Put([]byte("maxSuccNoPrime"), nextBytes)
-                continue
-            }
-
-            primes.Put(maxSuccPrime.Bytes(), nextBytes)
-            maxSuccPrime.Set(next)
-            prop.Put([]byte("maxSuccPrime"), nextBytes)
-        }
-    })
-    if err != nil {
-        return err
+    length := new(big.Int)
+    length.SetUint64(uint64(len(pdb.primes)))
+    if length.Cmp(i) <= 0 {
+        return nil, nil
     }
-    return nil
+
+    return newInt(pdb.primes[i.Int64()]), nil
 }
 
-func (pdb *primeDB) nextPrime(prime *big.Int) (next *big.Int, err error) {
-    next = new(big.Int)
-    err = updatePDB(func(tx *bolt.Tx) error {
-        primes := tx.Bucket([]byte("primes"))
-
-        next.SetBytes(primes.Get(prime.Bytes()))
-
+func last(s []*big.Int) *big.Int {
+    if len(s) == 0 {
         return nil
-    })
-    if err != nil {
-        return nil, err
     }
-    return next, nil
+    return s[len(s)-1]
 }
-
-// db format
-//  "prop"
-//    "nSuccession": big.Int
-//    "maxSuccPrime": big.Int
-//    "maxSuccNoPrime": big.Int
-//  "prime": Bucket
-//    big.Int: big.Int (next prime)
-//  "noSuccession": Bucket
-//    big.Int: 0,1
-
-var boltDB *bolt.DB
-
-func updatePDB(fn func(*bolt.Tx) error) (err error) {
-    if boltDB != nil {
-        return boltDB.Update(func(tx *bolt.Tx) error {
-            return fn(tx)
-        })
-    }
-
-    boltDB, err = bolt.Open("prime.db", 0600, nil)
-    if err != nil {
-        return err
-    }
-
-    return boltDB.Update(func(tx *bolt.Tx) error {
-        prop := tx.Bucket([]byte("prop"))
-        if prop != nil {
-            return fn(tx)
-        }
-
-        prop, err = tx.CreateBucket([]byte("prop"))
-        if err != nil {
-            panic("") //return err
-        }
-        prop.Put([]byte("nSuccession"), big2.Bytes())
-        prop.Put([]byte("maxSuccPrime"), big3.Bytes())
-        prop.Put([]byte("maxSuccNoPrime"), big.NewInt(4).Bytes())
-
-        primes, err := tx.CreateBucket([]byte("primes"))
-        if err != nil {
-            panic("") //return err
-        }
-        err = primes.Put(big2.Bytes(), big3.Bytes());
-        if err != nil {
-            panic("") //return err
-        }
-
-        _, err = tx.CreateBucket([]byte("noSuccession"))
-        if err != nil {
-            panic("") //return err
-        }
-        return fn(tx)
-    })
-}
-
-func initDB(tx *bolt.Tx, prop *bolt.Bucket) error {
-    prop.Put([]byte("nSuccession"), big2.Bytes())
-    primes, err := tx.CreateBucket([]byte("primes"))
-    
-    if err != nil {
-        panic("") //return err
-    }
-    return primes.Put(big2.Bytes(), big3.Bytes());
-}    
 
 func newInt(i *big.Int) *big.Int {
     bi := new(big.Int)
@@ -433,4 +260,15 @@ func isBytesTrue(bytes []byte) bool {
     }
 
     return bytes[0] == bTrue[0]
+}
+
+func printSlice(bs []*big.Int) {
+//    sep := ""
+//    log.Printf("slice: [")
+//    for _, b := range bs {
+//        log.Printf("%v", b)
+//        log.Printf("%s", sep)
+//        sep = ","
+//    }
+//    log.Printf("]\n")
 }

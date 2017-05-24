@@ -13,7 +13,7 @@ import (
 )
 
 const (
-    queueSize = 100000
+    queueSize = 200000
     maxRetry = 10
 )
 
@@ -53,6 +53,7 @@ func pnTweet(client *twitter.Client, primes *prime.Prime) {
     ch := make(chan *big.Int, queueSize)
 
     go makePrimes(primes, maxPrime, ch)
+
     tweetPrimes(client, ch)
 }
 
@@ -104,6 +105,7 @@ func makePrimes(primes *prime.Prime, maxPrime *big.Int, ch chan *big.Int) {
             ch <- nil
             return
         }            
+        log.Printf("makePrimes: found %v\n", prime)
     }
 }
 
