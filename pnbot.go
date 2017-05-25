@@ -2,6 +2,7 @@ package main
 
 import (
     "flag"
+    "fmt"
     "log"
     "os"
     "math/big"
@@ -31,38 +32,61 @@ func main() {
         log.Fatal("Consumer key/secret and Access token/secret required")
     }
 
-    config := oauth1.NewConfig(*consumerKey, *consumerSecret)
-    token := oauth1.NewToken(*accessToken, *accessSecret)
-    
-    primes := prime.NewPrime()
-
-    pnTweet(config, token, primes)
+    pnbot := NewPNBot(consumerKey, consumerSecret, accessToken, accessSecret)
+    pnbot.Start()
 }
 
-func newClient(config *oauth1.Config, token *oauth1.Token) *twitter.Client {
+func NewPNBot(consumerKey *string, consumerSecret *string,
+              accessToken *string, accessSecret *string) *PNBot {
+    pnbot := &PNBot{
+        consumerKey: consumerKey,
+        consumerSecret: consumerSecret,
+        accessToken: accessToken,
+        accessSecret: accessSecret,
+        prime: prime.NewPrime(),
+        ch: make(chan *big.Int, queueSize),
+    }
+
+    return pnbot
+}
+
+type PNBot struct {
+    consumerKey *string
+    consumerSecret *string
+    accessToken *string
+    accessSecret *string
+
+    prime *prime.Prime
+    ch chan *big.Int
+
+    client *twitter.Client
+
+}
+
+func (pnbot *PNBot) Start() error {
+    pnbot.client = pnbot.newClient()
+
+    maxPrime, err := pnbot.getMaxPrime()
+    if err != nil {
+        log.Printf("getMaxPrime: %v\n", err)
+        return err
+    }
+
+    go pnbot.makePrimes(maxPrime)
+
+    return pnbot.tweetPrimes()
+}
+
+func (pnbot *PNBot) newClient() *twitter.Client {
+    config := oauth1.NewConfig(*pnbot.consumerKey, *pnbot.consumerSecret)
+    token := oauth1.NewToken(*pnbot.accessToken, *pnbot.accessSecret)
     httpClient := config.Client(oauth1.NoContext, token)
 
     return twitter.NewClient(httpClient)
 }
 
-func pnTweet(config *oauth1.Config, token *oauth1.Token, primes *prime.Prime) {
-    client := newClient(config, token)
-
-    maxPrime, err := getMaxPrime(client)
-    if err != nil {
-        log.Fatalf("getMaxPrime: %v\n", err)
-        return
-    }
-
-    ch := make(chan *big.Int, queueSize)
-
-    go makePrimes(primes, maxPrime, ch)
-
-    tweetPrimes(client, config, token, ch)
-}
-
-func getMaxPrime(client *twitter.Client) (prime *big.Int, err error) {
-    tweets, _, err := client.Timelines.HomeTimeline(&twitter.HomeTimelineParams{
+func (pnbot *PNBot) getMaxPrime() (prime *big.Int, err error) {
+    tweets, _, err := pnbot.client.Timelines.HomeTimeline(&twitter.HomeTimelineParams{
         SinceID: 0,
     })
     if err != nil {
@@ -82,15 +106,15 @@ func getMaxPrime(client *twitter.Client) (prime *big.Int, err error) {
     return &maxPrime, nil
 }
 
-func makePrimes(primes *prime.Prime, maxPrime *big.Int, ch chan *big.Int) {
+func (pnbot *PNBot) makePrimes(maxPrime *big.Int) {
     var prime *big.Int
     var err error
 
     for {
-        prime, err = primes.Next()
+        prime, err = pnbot.prime.Next()
         if err != nil {
             log.Fatalf("makePrimes: %v\n", err)
-            ch <- nil
+            pnbot.ch <- nil
             return
         }            
 
@@ -101,40 +125,39 @@ func makePrimes(primes *prime.Prime, maxPrime *big.Int, ch chan *big.Int) {
     }
 
     for {
-        ch <- prime
+        log.Printf("makePrimes: found %v\n", prime)
+        pnbot.ch <- prime
 
-        prime, err = primes.Next()
+        prime, err = pnbot.prime.Next()
         if err != nil {
             log.Fatalf("makePrimes: %v\n", err)
-            ch <- nil
+            pnbot.ch <- nil
             return
         }            
-        log.Printf("makePrimes: found %v\n", prime)
     }
 }
 
-func tweetPrimes(client *twitter.Client, config *oauth1.Config, token *oauth1.Token, ch chan *big.Int) {
+func (pnbot *PNBot) tweetPrimes() error {
     for {
-        prime := <- ch
+        prime := <- pnbot.ch
         if prime == nil {
             log.Fatalf("prime generator was died")
-            return
+            return fmt.Errorf("prime generator was died")
         }
 
         text := prime.Text(10)
         retry := 0
         for {
-            _, _, err := client.Statuses.Update(text, nil)
+            _, _, err := pnbot.client.Statuses.Update(text, nil)
             if err == nil {
                 break
             }
             if retry >= maxRetry {
-                log.Fatalf("Too many tweet error: %v\n", err)
-                return
+                return fmt.Errorf("Too many tweet error: %v\n", err)
             }
             log.Printf("Tweet error: %v\n", err)
             time.Sleep(5 * (time.Duration(retry) + 1) * time.Minute)
-            client = newClient(config, token)
+            pnbot.client = pnbot.newClient()
             retry++
             continue
         }
