@@ -138,6 +138,8 @@ func (pnbot *PNBot) makePrimes(maxPrime *big.Int) {
 }
 
 func (pnbot *PNBot) tweetPrimes() error {
+    interval := 1 * time.Second
+
     for {
         prime := <- pnbot.ch
         if prime == nil {
@@ -147,7 +149,7 @@ func (pnbot *PNBot) tweetPrimes() error {
 
         text := prime.Text(10)
         retry := 0
-        interval := 10 * time.Second
+        retryInterval := 10 * time.Second
         for {
             _, _, err := pnbot.client.Statuses.Update(text, nil)
             if err == nil {
@@ -156,15 +158,19 @@ func (pnbot *PNBot) tweetPrimes() error {
             if retry >= maxRetry {
                 return fmt.Errorf("Too many tweet error: %v\n", err)
             }
-            log.Printf("Tweet error[%d/%d]:sleep=%s: %v\n", retry+1, maxRetry, interval, err)
+            log.Printf("Tweet error[%d/%d]:sleep=%s: %v\n", retry+1, maxRetry, retryInterval, err)
 
             time.Sleep(interval)
             pnbot.client = pnbot.newClient()
             retry++
-            interval *= 2
+            retryInterval *= 2
             continue
         }
+        if retry > 0 {
+            interval += 1 * time.Second
+        }
+
         log.Printf("tweet %s\n", text)
-        time.Sleep(1 * time.Second)
+        time.Sleep(interval)
     }
 }
