@@ -59,7 +59,7 @@ func (prime *Prime) IsPrime(n *big.Int) (bool, error) {
     //fmt.Printf("IsPrime: n=%v/r=%v\n", n, r)
 
     pdb := prime.pdb
-    subPrime := newPrime(pdb)
+    subPrime := prime.NewPrime()
 
     for {
         p, err := subPrime.Next()
@@ -80,6 +80,10 @@ func (prime *Prime) IsPrime(n *big.Int) (bool, error) {
     return true, nil
 }
 
+
+func (prime *Prime) NewPrime() *Prime {
+    return newPrime(prime.pdb)
+}
 
 func (prime *Prime) Next() (next *big.Int, err error) {
     //fmt.Printf("Next:%v\n", ps.i)
