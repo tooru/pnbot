@@ -160,7 +160,7 @@ func (pnbot *PNBot) tweetPrimes() error {
             }
             log.Printf("Tweet error[%d/%d]:sleep=%s: %v\n", retry+1, maxRetry, retryInterval, err)
 
-            time.Sleep(interval)
+            time.Sleep(retryInterval)
             pnbot.client = pnbot.newClient()
             retry++
             retryInterval *= 2
@@ -170,7 +170,7 @@ func (pnbot *PNBot) tweetPrimes() error {
             interval += 1 * time.Second
         }
 
-        log.Printf("tweet %s\n", text)
+        log.Printf("tweet %s :sleep=%s\n", text, interval)
         time.Sleep(interval)
     }
 }
