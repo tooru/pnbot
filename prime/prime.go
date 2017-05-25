@@ -17,15 +17,30 @@ var big3 = big.NewInt(3)
 var bTrue  = []byte{byte(1)}
 var bFalse = []byte{byte(0)}
 
-var pdb = newPrimeDB()
+type Prime struct {
+    i *big.Int
+    cur *big.Int
+    pdb *primeDB
+}
 
-// error will be IO or timeout
-func IsPrime(n *big.Int) (bool, error) {
+func NewPrime () *Prime {
+    return newPrime(newPrimeDB())
+}
+
+func newPrime (primeDB *primeDB) *Prime {
+    return &Prime {
+        i: big.NewInt(0),
+        cur: nil,
+        pdb: primeDB,
+    }
+}
+
+func (prime *Prime) IsPrime(n *big.Int) (bool, error) {
     if n.Cmp(big2) < 0 {
         return false, nil
     }
 
-    isPrime, err := pdb.isPrime(n)
+    isPrime, err := prime.pdb.isPrime(n)
     if err != nil {
         return false, err
     }
@@ -43,10 +58,11 @@ func IsPrime(n *big.Int) (bool, error) {
 
     //fmt.Printf("IsPrime: n=%v/r=%v\n", n, r)
 
-    ps := NewPrime()
+    pdb := prime.pdb
+    subPrime := newPrime(pdb)
 
     for {
-        p, err := ps.Next()
+        p, err := subPrime.Next()
         if err != nil {
             panic("") //return false, err
         }
@@ -64,28 +80,17 @@ func IsPrime(n *big.Int) (bool, error) {
     return true, nil
 }
 
-type Prime struct {
-    i *big.Int
-    cur *big.Int
-}
 
-func NewPrime () *Prime {
-    ps := new(Prime)
-    ps.i = big.NewInt(0)
-    ps.cur = nil
-    return ps
-}
-
-func (ps *Prime) Next() (next *big.Int, err error) {
+func (prime *Prime) Next() (next *big.Int, err error) {
     //fmt.Printf("Next:%v\n", ps.i)
 
-    if ps.cur == nil {
-        ps.cur = big.NewInt(2)
-        ps.i.Add(ps.i, big1)
+    if prime.cur == nil {
+        prime.cur = big.NewInt(2)
+        prime.i.Add(prime.i, big1)
         return big.NewInt(2), nil
-    } else if ps.cur.Cmp(big2) == 0 {
-        ps.cur = big.NewInt(3)
-        ps.i.Add(ps.i, big1)
+    } else if prime.cur.Cmp(big2) == 0 {
+        prime.cur = big.NewInt(3)
+        prime.i.Add(prime.i, big1)
         return big.NewInt(3), nil
     }
 
@@ -93,20 +98,21 @@ func (ps *Prime) Next() (next *big.Int, err error) {
         panic("") //return nil, err
     }
 
-    p, err := pdb.nPrime(ps.i)
+    pdb := prime.pdb
+    p, err := pdb.nPrime(prime.i)
 
     if p != nil {
-        ps.cur.Set(p)
-        ps.i.Add(ps.i, big1)
+        prime.cur.Set(p)
+        prime.i.Add(prime.i, big1)
         return newInt(p), nil
     }
 
-    p = newInt(ps.cur)
+    p = newInt(prime.cur)
     for {
         p.Add(p, big2)
         //log.Printf("next?: %v\n", p)
 
-        b, err := IsPrime(p)
+        b, err := prime.IsPrime(p)
         if err != nil {
             panic("") //return nil, err
         }
@@ -120,8 +126,8 @@ func (ps *Prime) Next() (next *big.Int, err error) {
     if err := pdb.addNextPrime(p); err != nil {
         panic("") //return nil, err
     }
-    ps.cur = p
-    ps.i.Add(ps.i, big1)
+    prime.cur = p
+    prime.i.Add(prime.i, big1)
   
     return newInt(p), nil
 }
