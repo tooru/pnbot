@@ -155,7 +155,7 @@ func (pnbot *PNBot) tweetPrimes() error {
             if retry >= maxRetry {
                 return fmt.Errorf("Too many tweet error: %v\n", err)
             }
-            log.Printf("Tweet error: %v\n", err)
+            log.Printf("Tweet error[%d/%d]: %v\n", retry+1, maxRetry, err)
             time.Sleep(5 * (time.Duration(retry) + 1) * time.Minute)
             pnbot.client = pnbot.newClient()
             retry++
