@@ -138,7 +138,7 @@ func (pnbot *PNBot) makePrimes(maxPrime *big.Int) {
 }
 
 func (pnbot *PNBot) tweetPrimes() error {
-    interval := 1 * time.Second
+    interval := 10 * time.Second
 
     for {
         prime := <- pnbot.ch
@@ -167,7 +167,7 @@ func (pnbot *PNBot) tweetPrimes() error {
             continue
         }
         if retry > 0 {
-            interval += 1 * time.Second
+            interval = max(interval + 1 * time.Second, 30 * time.Second)
         }
 
         log.Printf("tweet %s :sleep=%s\n", text, interval)
