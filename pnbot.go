@@ -163,7 +163,7 @@ func (pnbot *PNBot) tweetPrimes() error {
             time.Sleep(retryInterval)
             pnbot.client = pnbot.newClient()
             retry++
-            retryInterval *= 2
+            retryInterval = max(retryInterval * 2, 30 * time.Minute)
             continue
         }
         if retry > 0 {
@@ -172,5 +172,13 @@ func (pnbot *PNBot) tweetPrimes() error {
 
         log.Printf("tweet %s :sleep=%s\n", text, interval)
         time.Sleep(interval)
+    }
+}
+
+func max(a time.Duration, b time.Duration) time.Duration {
+    if a > b {
+        return b
+    } else {
+        return a
     }
 }
