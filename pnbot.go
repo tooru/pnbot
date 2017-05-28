@@ -15,7 +15,7 @@ import (
 
 const (
     queueSize = 10
-    maxRetry = 10
+    maxRetry = 30
 )
 
 func main() {
