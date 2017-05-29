@@ -181,7 +181,7 @@ func (pnbot *PNBot) tweetPrimes() error {
         contN++
         totalN++
 
-        log.Printf("tweet:%d:%d:%s:sleep=%s:%.2f tw/min: %.2f tw/min\n",
+        log.Printf("tweet:%d:%d:%s:sleep=%s:%.2f tw/h: %.2f tw/h\n",
             totalN, contN,
             text,
             interval,
