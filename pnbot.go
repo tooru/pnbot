@@ -185,8 +185,8 @@ func (pnbot *PNBot) tweetPrimes() error {
             totalN, contN,
             text,
             interval,
-            float64(totalN)/float64((now.Sub(totalStart)/time.Minute)),
-            float64(contN)/float64((now.Sub(contStart)/time.Minute)))
+            float64(totalN)/(float64(now.Sub(totalStart))/float64(time.Hour)),
+            float64(contN)/(float64(now.Sub(contStart))/float64(time.Hour)))
         time.Sleep(interval)
     }
 }
