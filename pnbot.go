@@ -4,18 +4,27 @@ import (
     "flag"
     "fmt"
     "log"
+    "encoding/json"
     "os"
     "math/big"
+    "sort"
+    "strings"
     "time"
+    "unicode"
 
     "github.com/tooru/pnbot/prime"
     "github.com/dghubble/go-twitter/twitter"
     "github.com/dghubble/oauth1"
+//    "github.com/davecgh/go-spew/spew"
 )
 
 const (
+    maxTweetCharactors = 140
+    hellipsis = "\u2026"
+
     queueSize = 10
     maxRetry = 30
+    interval = 1 * time.Second
 )
 
 func main() {
@@ -44,7 +53,6 @@ func NewPNBot(consumerKey *string, consumerSecret *string,
         accessToken: accessToken,
         accessSecret: accessSecret,
         prime: prime.NewPrime(),
-        ch: make(chan *big.Int, queueSize),
     }
 
     return pnbot
@@ -57,24 +65,33 @@ type PNBot struct {
     accessSecret *string
 
     prime *prime.Prime
-    ch chan *big.Int
 
     client *twitter.Client
 
 }
 
+type PNTweet struct {
+    text string
+    params *twitter.StatusUpdateParams
+}
+
 func (pnbot *PNBot) Start() error {
     pnbot.client = pnbot.newClient()
 
-    maxPrime, err := pnbot.getMaxPrime()
+    maxPrime, lastReplyID, err := pnbot.findLastUpdated()
     if err != nil {
-        log.Printf("getMaxPrime: %v\n", err)
         return err
     }
+    log.Printf("%v %v", maxPrime, lastReplyID)
 
-    go pnbot.makePrimes(maxPrime)
+    primes := make(chan *PNTweet, 10)
+    replies := make(chan *PNTweet, 10)
+    quit := make(chan interface{})
 
-    return pnbot.tweetPrimes()
+    go pnbot.makePrimes(maxPrime, primes, quit)
+    go pnbot.replyPrime(lastReplyID, replies, quit)
+
+    return pnbot.tweet(primes, replies, quit)
 }
 
 func (pnbot *PNBot) newClient() *twitter.Client {
@@ -85,61 +102,43 @@ func (pnbot *PNBot) newClient() *twitter.Client {
     return twitter.NewClient(httpClient)
 }
 
-func (pnbot *PNBot) getMaxPrime() (prime *big.Int, err error) {
-    tweets, _, err := pnbot.client.Timelines.HomeTimeline(&twitter.HomeTimelineParams{
-        SinceID: 0,
-    })
-    if err != nil {
-        return nil, err
-    }
-
-    var maxPrime big.Int
-
-    for _, tweet := range tweets {
-        if _, ok := maxPrime.SetString(tweet.Text, 10); ok {
-            log.Printf("continue from '%s'", tweet.Text)
-            return &maxPrime, nil
-        }
-        log.Printf("skip '%v'", tweet.Text)
-    }
-    maxPrime.SetInt64(0)
-    return &maxPrime, nil
-}
-
-func (pnbot *PNBot) makePrimes(maxPrime *big.Int) {
+func (pnbot *PNBot) makePrimes(maxPrime *big.Int, primes chan *PNTweet, quit chan interface{}) {
     var prime *big.Int
     var err error
+
+    log.Printf("makePrime: %v\n", maxPrime)
 
     for {
         prime, err = pnbot.prime.Next()
         if err != nil {
             log.Fatalf("makePrimes: %v\n", err)
-            pnbot.ch <- nil
+            quit <- nil
             return
-        }            
+        }
 
         if prime.Cmp(maxPrime) > 0 {
             break;
         }
-        log.Printf("makePrimes: skip %v\n", prime)
+        //log.Printf("makePrimes: skip %v\n", prime)
     }
 
     for {
         log.Printf("makePrimes: found %v\n", prime)
-        pnbot.ch <- prime
+        //primes <- &PNTweet{
+        //text: prime.Text(10),
+        //}
 
         prime, err = pnbot.prime.Next()
         if err != nil {
             log.Fatalf("makePrimes: %v\n", err)
-            pnbot.ch <- nil
+            quit <- nil
             return
-        }            
+        }
+        time.Sleep(600 * time.Second)
     }
 }
 
-func (pnbot *PNBot) tweetPrimes() error {
-    interval := 1 * time.Second
-
+func (pnbot *PNBot) tweet(primes chan *PNTweet, replies chan *PNTweet, quit chan interface{}) error {
     totalN := 0
     totalStart := time.Now()
 
@@ -147,17 +146,21 @@ func (pnbot *PNBot) tweetPrimes() error {
     contStart := totalStart
 
     for {
-        prime := <- pnbot.ch
-        if prime == nil {
-            log.Fatalf("prime generator was died")
-            return fmt.Errorf("prime generator was died")
+        var pnTweet *PNTweet
+
+        select {
+        case pnTweet = <- primes:
+        case pnTweet = <- replies:
+        case <- quit:
+            log.Fatalf("error occurred.")
         }
 
-        text := prime.Text(10)
         retry := 0
         retryInterval := 10 * time.Second
         for {
-            _, _, err := pnbot.client.Statuses.Update(text, nil)
+            //err := error(nil);
+            log.Printf("TWEET: %s, %v", pnTweet.text, pnTweet.params)
+            _, _, err := pnbot.client.Statuses.Update(pnTweet.text, pnTweet.params)
             if err == nil {
                 break
             }
@@ -183,11 +186,67 @@ func (pnbot *PNBot) tweetPrimes() error {
 
         log.Printf("tweet:%d:%d:%s:sleep=%s:%.2f tw/h: %.2f tw/h\n",
             totalN, contN,
-            text,
+            pnTweet.text,
             interval,
             float64(totalN)/(float64(now.Sub(totalStart))/float64(time.Hour)),
             float64(contN)/(float64(now.Sub(contStart))/float64(time.Hour)))
-        time.Sleep(interval)
+    }
+}
+
+func (pnbot *PNBot) findLastUpdated() (maxPrime *big.Int, lastReplyID int64, err error) {
+    params := twitter.HomeTimelineParams{
+        Count: 200,
+        SinceID: 0,
+    }
+
+    n := 0
+
+    for {
+        tweets, _, err := pnbot.client.Timelines.HomeTimeline(&params)
+        if err != nil {
+            log.Printf("findLastUpdated: %v\n", err)
+            time.Sleep(time.Minute)
+            continue
+        }
+
+        var prime big.Int
+
+        if len(tweets) == 0 {
+            if maxPrime == nil {
+                maxPrime = big.NewInt(0)
+            }
+            return maxPrime, lastReplyID, nil
+        }
+
+        for _, tweet := range tweets {
+            //log.Printf("tweet:%d", tweet.ID)
+            params.MaxID = tweet.ID - 1
+
+            if tweet.InReplyToStatusID == 0 {
+                if maxPrime != nil {
+                    continue
+                }
+                if _, ok := prime.SetString(tweet.Text, 10); ok {
+                    log.Printf("continue from '%s'", tweet.Text)
+                    maxPrime = &prime
+                    if lastReplyID != 0 {
+                        return maxPrime, lastReplyID, nil
+                    }
+                }
+                log.Printf("skip '%v'", tweet.Text)
+            } else {
+                if lastReplyID != 0 {
+                    continue
+                }
+                lastReplyID = tweet.InReplyToStatusID
+                if maxPrime != nil {
+                    return maxPrime, lastReplyID, nil
+                }
+            }
+        }
+        n++
+        log.Printf("get next tweets:%d", n)
+        time.Sleep(10 * interval)
     }
 }
 
@@ -196,5 +255,189 @@ func max(a time.Duration, b time.Duration) time.Duration {
         return b
     } else {
         return a
+    }
+}
+
+type Response struct {
+    Method string `json:"method"`
+    Params interface{} `json:"params"`
+    Result interface{} `json:"result"`
+}
+
+func (pnbot *PNBot) replyPrime(lastReplyID int64, replies chan *PNTweet, quit chan interface{}) error {
+    for {
+        params := twitter.MentionTimelineParams{
+            SinceID: lastReplyID + 1,
+        }
+        mentions := []twitter.Tweet{}
+        for {
+            tweets, _, err := pnbot.client.Timelines.MentionTimeline(&params)
+
+            if err != nil {
+                return err
+            }
+            if len(tweets) == 0 {
+                break
+            }
+
+            mentions = append(mentions, tweets...)
+            params.MaxID = tweets[len(tweets)-1].ID - 1
+        }
+
+        reverse(mentions)
+
+        for _, tweet := range mentions {
+            n, ok := parseTweet(tweet)
+
+            if !ok {
+                continue
+            }
+
+            b, err := pnbot.prime.IsPrime(n)
+            if err != nil {
+                log.Printf("%v", err)
+
+                err := replyPrimeImpl(replies, n, "unknown", tweet)
+
+                if err != nil {
+                    quit <- nil
+                    return err
+                }
+                continue
+            }
+
+            if b {
+                err = replyPrimeImpl(replies, n, "primeNumber", tweet)
+            } else {
+                err = replyPrimeImpl(replies, n, "notPrimeNumber", tweet)
+            }
+            if err != nil {
+                quit <- nil
+                return err
+            }
+        }
+        if len(mentions) > 0 {
+            lastReplyID = mentions[len(mentions)-1].ID + 1
+        }
+        time.Sleep(10 * time.Second)
+    }
+}
+
+func replyPrimeImpl(replies chan *PNTweet, n *big.Int, result string, tweet twitter.Tweet) error {
+    var text string
+
+    pnText := n.Text(10)
+
+    for {
+        bytes, err := json.Marshal(Response{
+            Method: "isPrime",
+            Params: pnText,
+            Result: result,
+        })
+
+        if err != nil {
+            return err
+        }
+
+        text = fmt.Sprintf("@%s %s", tweet.User.ScreenName, string(bytes))
+        log.Printf("%v %v", text, len(text))
+        if len(text) <= maxTweetCharactors {
+            break
+        }
+        pnText = pnText[0:(len(pnText)+maxTweetCharactors-len(text)-len(hellipsis))]
+        pnText = pnText + hellipsis
+    }
+
+
+    //replies <- &PNTweet{
+    //    text: text,
+    //    params: &twitter.StatusUpdateParams{
+    //        InReplyToStatusID: tweet.ID,
+    //    },
+    //}
+    time.Sleep(10 * time.Second)
+    return nil
+}
+
+func parseTweet(tweet twitter.Tweet) (*big.Int, bool) {
+    text := tweet.Text
+    i := 0
+
+    log.Printf("'%s' ", text)
+
+    for _, indices := range getEntityIndices(&tweet) {
+        if i == indices.Start() {
+            i = indices.End()
+            continue
+        }
+        str := text[i:indices.Start()]
+        log.Printf("'%s'\n", str)
+        if n, ok := parseNumber(str); ok {
+            return n, true
+        }
+        i = indices.End()
+    }
+
+    if i < len(text) {
+        str := text[i:]
+        log.Printf("'%s'\n", str)
+        if n, ok := parseNumber(str); ok {
+            return n, true
+        }
+    }
+
+    log.Printf("ignored\n")
+    return nil, false
+}
+
+func parseNumber(str string) (*big.Int, bool) {
+    n := new(big.Int)
+    if _, ok := n.SetString(strings.TrimFunc(str, unicode.IsSpace), 10); ok {
+        return n, true
+    }
+    return nil, false
+
+}
+
+type indices []twitter.Indices
+
+func (is indices) Len() int {
+    return len(is)
+}
+
+func (is indices) Swap(i, j int) {
+    is[i], is[j] = is[j], is[i]
+}
+
+func (is indices) Less(i, j int) bool {
+    return is[i].Start() < is[j].Start()
+}
+
+func getEntityIndices(tweet *twitter.Tweet) []twitter.Indices {
+    var res indices = make([]twitter.Indices, 0)
+
+    entities := tweet.Entities
+
+    for _, entity := range entities.Hashtags {
+        res = append(res, entity.Indices)
+    }
+    for _, entity := range entities.Media {
+        res = append(res, entity.Indices)
+    }
+    for _, entity := range entities.Urls {
+        res = append(res, entity.Indices)
+    }
+    for _, entity := range entities.UserMentions {
+        res = append(res, entity.Indices)
+    }
+
+    sort.Sort(res)
+
+    return res
+}
+
+func reverse(tweets []twitter.Tweet) {
+    for i, j := 0, len(tweets)-1; i < j; i, j = i + 1, j - 1 {
+        tweets[i], tweets[j] = tweets[j], tweets[i]
     }
 }

@@ -3,10 +3,16 @@ package prime
 // TODO create db viewer
 
 import (
-    //"log"
+    "errors"
+    "log"
     "math/big"
     "sort"
     "sync"
+    "time"
+)
+
+const (
+    timeout = 5 * time.Second
 )
 
 var big0 = big.NewInt(0)
@@ -21,13 +27,15 @@ type Prime struct {
     i *big.Int
     cur *big.Int
     pdb *primeDB
+
+    mutex sync.Mutex
 }
 
-func NewPrime () *Prime {
+func NewPrime() *Prime {
     return newPrime(newPrimeDB())
 }
 
-func newPrime (primeDB *primeDB) *Prime {
+func newPrime(primeDB *primeDB) *Prime {
     return &Prime {
         i: big.NewInt(0),
         cur: nil,
@@ -36,8 +44,18 @@ func newPrime (primeDB *primeDB) *Prime {
 }
 
 func (prime *Prime) IsPrime(n *big.Int) (bool, error) {
+    prime.mutex.Lock()
+    defer prime.mutex.Unlock()
+
+    return prime.isPrime(n, time.Now().Add(timeout))
+}
+
+func (prime *Prime) isPrime(n *big.Int, expire time.Time) (bool, error) {
     if n.Cmp(big2) < 0 {
         return false, nil
+    }
+    if time.Now().After(expire) {
+        return false, errors.New("timeout")
     }
 
     isPrime, err := prime.pdb.isPrime(n)
@@ -62,9 +80,9 @@ func (prime *Prime) IsPrime(n *big.Int) (bool, error) {
     subPrime := prime.NewPrime()
 
     for {
-        p, err := subPrime.Next()
+        p, err := subPrime.next(expire)
         if err != nil {
-            panic("") //return false, err
+            return false, err
         }
 
         if p.Cmp(r) > 0 {
@@ -86,8 +104,19 @@ func (prime *Prime) NewPrime() *Prime {
 }
 
 func (prime *Prime) Next() (next *big.Int, err error) {
+    prime.mutex.Lock()
+    defer prime.mutex.Unlock()
+
+    
+    return prime.next(time.Now().Add(timeout))
+}
+
+func (prime *Prime) next(expire time.Time) (next *big.Int, err error) {
     //fmt.Printf("Next:%v\n", ps.i)
 
+    if time.Now().After(expire) {
+        return nil, errors.New("timeout")
+    }
     if prime.cur == nil {
         prime.cur = big.NewInt(2)
         prime.i.Add(prime.i, big1)
@@ -116,16 +145,16 @@ func (prime *Prime) Next() (next *big.Int, err error) {
         p.Add(p, big2)
         //log.Printf("next?: %v\n", p)
 
-        b, err := prime.IsPrime(p)
+        b, err := prime.isPrime(p, expire)
         if err != nil {
-            panic("") //return nil, err
+            return nil, err
         }
         if b {
             break
         }
     }
 
-    //fmt.Printf("Put:%v -> %v\n", ps.cur, p)
+    //log.Printf("nextPrime:%v", p)
     
     if err := pdb.addNextPrime(p); err != nil {
         panic("") //return nil, err
@@ -193,6 +222,7 @@ func assertNextPrime(pdb *primeDB, next *big.Int) {
     prev := last(pdb.primes)
 
     if prev.Cmp(next) >= 0 {
+        log.Printf("prev: %v next: %v", prev, next)
         panic("")
         //log.Fatalf("prev: %v next: %v", prev, next)
     }
