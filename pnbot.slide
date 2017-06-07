@@ -1,0 +1,115 @@
+GoでTwitter bot を作ってみた🐤
+横浜Go読書会 #7
+10 Jun 2017
+
+Tooru Takahashi
+
+@dpnbot
+@tpnbot
+
+* 話すこと
+
+- Twitter Botとは
+- GoでのTwitter Botの作り方 (準備・配信型・応答型)
+- デモ
+- やってみて所感
+- まとめ
+
+* Twitter Bot とは
+
+.link http://twinavi.jp/guide/section/twitter/glossary/%E3%83%9C%E3%83%83%E3%83%88%EF%BC%88bot%EF%BC%89%E3%81%A8%E3%81%AF ツイナビ - ボット（bot）とは
+
+ Twitter の機能を使って作られた、機械による自動発言システム。語源はロボットから来ている。
+ 特定の時間に自動ツイートする bot、ユーザーの bot宛の発言にリプライする bot、
+ 特定のキーワードに反応する bot 等、様々な bot が存在する。
+
+自動ツイートの例
+
+.link https://twitter.com/traindelay @traindelay 電車遅延なう
+# .link https://twitter.com/kiri_tori @kiri_tori 
+
+チャットボット作成サポートの事業もある
+.link http://ai.userlocal.jp/document/about/ 株式会社ユーザーローカル - チャットボットとは
+
+最近ではLINE / Facebook / Slack が有名？
+.link http://appllio.com/20161009-8595-line-reversi-bot LINEトーク上で「リバーシ」を遊べるチャットボットが面白い
+
+古くは、、IRCの頃から
+.link http://www.din.or.jp/~ohzaki/uzura.htm 人工無能うずら(人工痴能)の部屋
+
+
+* GoでのTwitter Botの作り方 1/3 (準備)
+
+1. Twitter APIを使えるようにする
+.link https://apps.twitter.com
+Twitter APIを叩くアプリを登録し、API Key等を入手
+
+2. Twitter Library を取得
+
+ $ go get github.com/dghubble/go-twitter/twitter
+ $ go get github.com/dghubble/oauth1
+
+今回はdghubble/go-twitter を使用、ChimeraCoder/anaconda もよさそう
+
+両方ともTwitter Developer Documentationに載っている
+.link https://dev.twitter.com/resources/twitter-libraries
+
+
+* GoでのTwitter Botの作り方 2/3 配信型 (つぶやく方法)
+
+.code -numbers slide/tweet.go
+
+⚠️APIキーはハードコードは危険です。別ファイル等から取得しましょう。
+
+* GoでのTwitter Botの作り方 3/3 応答型 (ざっくりと)
+
+1. 自身へのMention (@<user>がついたツイート)を取得、アプローチは2つ
+
+1-a. プログラム起動後のMentionに対応
+
+.link https://dev.twitter.com/streaming/userstreams
+
+1-b. プログラム起動前のMentionにも対応：HomeTimeline(自分の発言)を調べて最後に返信したMention以降に対応する
+
+
+.link https://dev.twitter.com/rest/reference/get/statuses/home_timeline
+.link https://dev.twitter.com/rest/reference/get/statuses/mentions_timeline
+
+
+2. ツイートを解析
+
+.link https://dev.twitter.com/overview/api/entities
+ツイートの解析結果が取得可能 (@<user>を抽出、本文を抽出)
+
+3. 返答する (配信型と同じ)
+
+* デモ
+
+* やってみて所感
+
+🔷 dghubble/go-twitter
+特に不満なし
+
+🔷math/big
+immutableではないので扱いに注意が必要
+
+ // 例:足し算 (a += b)
+ a.Add(a, b)
+
+🔷Go Routine & Channel
+Channel便利。素数生成→素数ツイートで使用
+
+
+🔷Twitter APIのアクセス頻度
+.link https://dev.twitter.com/rest/public/rate-limiting
+
+アクセス頻度オーバーが起きることを考慮する必要あり(リトライ処理など）
+
+🔷素数オンメモリの限界
+OOM Killerがやってくる。永続化方法を検討しないと、いずれbot継続できない
+
+
+* まとめ
+
+- Golang楽しい
+- Bot楽しい
