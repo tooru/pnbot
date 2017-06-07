@@ -170,6 +170,7 @@ func (pnbot *PNBot) tweet(tweets chan *PNTweet, quit chan interface{}) error {
             interval,
             float64(totalN)/(float64(now.Sub(totalStart))/float64(time.Hour)),
             float64(contN)/(float64(now.Sub(contStart))/float64(time.Hour)))
+        time.Sleep(interval)
     }
 }
 
@@ -276,7 +277,6 @@ func (pnbot *PNBot) makePrimes(maxPrime *big.Int, tweets chan *PNTweet, quit cha
             quit <- nil
             return
         }
-        time.Sleep(1 * time.Second)
     }
 }
 
@@ -324,7 +324,6 @@ func (pnbot *PNBot) makeTwinPrimes(maxPrime *big.Int, tweets chan *PNTweet, quit
             text: fmt.Sprintf("%s,%s", prevPrime.Text(10), prime.Text(10)),
         }
         prevPrime = prime
-        time.Sleep(1 * time.Second)
     }
 }
 
