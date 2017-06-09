@@ -462,7 +462,7 @@ func replyPrimeImpl(replies chan *PNTweet, n *big.Int, result string, tweet twit
     pnText := n.Text(10)
 
     for {
-        text = fmt.Sprintf("@%s %v: %s", tweet.User.ScreenName, n, result)
+        text = fmt.Sprintf("@%s %v: %s", tweet.User.ScreenName, pnText, result)
         log.Printf("%s %d", text, len(text))
         if len(text) <= maxTweetCharactors {
             break
