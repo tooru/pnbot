@@ -392,9 +392,14 @@ func (pnbot *PNBot) lastReplyID() (lastReplyID int64, err error) {
 }
 
 func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReplyID int64) error {
+    var prevID int64 = -1
+    var id int64 = lastReplyID + 1
     for {
+        if prevID != id {
+            log.Printf("lastReplyID: %d", id)
+        }
         params := twitter.MentionTimelineParams{
-            SinceID: lastReplyID + 1,
+            SinceID: id,
         }
         mentions := []twitter.Tweet{}
         for {
@@ -443,10 +448,11 @@ func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReply
                 return err
             }
         }
+        prevID = id
         if len(mentions) > 0 {
-            lastReplyID = mentions[len(mentions)-1].ID + 1
+            id = mentions[len(mentions)-1].ID + 1
         }
-        time.Sleep(10 * time.Minute)
+        time.Sleep(10 * time.Second)
     }
 }
 
