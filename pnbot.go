@@ -4,7 +4,6 @@ import (
     "flag"
     "fmt"
     "log"
-    "encoding/json"
     "os"
     "math/big"
     "sort"
@@ -17,6 +16,9 @@ import (
     "github.com/dghubble/oauth1"
 //    "github.com/davecgh/go-spew/spew"
 )
+
+// 187 Status is a duplicate.
+// 185 User is over daily status update limit.
 
 const (
     maxTweetCharactors = 140
@@ -351,62 +353,9 @@ func (pnbot *PNBot) startPrimeP() error {
     tweets := make(chan *PNTweet, 10)
     quit := make(chan interface{})
 
-    for {
-        params := twitter.MentionTimelineParams{
-            SinceID: lastReplyID + 1,
-        }
-        mentions := []twitter.Tweet{}
-        for {
-            ms, _, err := pnbot.client.Timelines.MentionTimeline(&params)
+    go pnbot.reply(tweets, quit, lastReplyID)
 
-            if err != nil {
-                return err
-            }
-            if len(ms) == 0 {
-                break
-            }
-
-            mentions = append(mentions, ms...)
-            params.MaxID = ms[len(ms)-1].ID - 1
-        }
-
-        reverse(mentions)
-
-        for _, mention := range mentions {
-            n, ok := parseTweet(mention)
-
-            if !ok {
-                continue
-            }
-
-            b, err := pnbot.prime.IsPrime(n)
-            if err != nil {
-                log.Printf("%v", err)
-
-                err := replyPrimeImpl(tweets, n, "unknown", mention)
-
-                if err != nil {
-                    quit <- nil
-                    return err
-                }
-                continue
-            }
-
-            if b {
-                err = replyPrimeImpl(tweets, n, "primeNumber", mention)
-            } else {
-                err = replyPrimeImpl(tweets, n, "notPrimeNumber", mention)
-            }
-            if err != nil {
-                quit <- nil
-                return err
-            }
-        }
-        if len(mentions) > 0 {
-            lastReplyID = mentions[len(mentions)-1].ID + 1
-        }
-        time.Sleep(10 * time.Minute)
-    }
+    return pnbot.tweet(tweets, quit)
 }
 
 func (pnbot *PNBot) lastReplyID() (lastReplyID int64, err error) {
@@ -442,24 +391,73 @@ func (pnbot *PNBot) lastReplyID() (lastReplyID int64, err error) {
     }
 }
 
+func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReplyID int64) error {
+    for {
+        params := twitter.MentionTimelineParams{
+            SinceID: lastReplyID + 1,
+        }
+        mentions := []twitter.Tweet{}
+        for {
+            ms, _, err := pnbot.client.Timelines.MentionTimeline(&params)
+
+            if err != nil {
+                return err
+            }
+            if len(ms) == 0 {
+                break
+            }
+
+            mentions = append(mentions, ms...)
+            params.MaxID = ms[len(ms)-1].ID - 1
+        }
+
+        reverse(mentions)
+
+        for _, mention := range mentions {
+            n, ok := parseTweet(mention)
+
+            if !ok {
+                continue
+            }
+
+            b, err := pnbot.prime.IsPrime(n)
+            if err != nil {
+                log.Printf("%v", err)
+
+                err := replyPrimeImpl(tweets, n, "timeout", mention)
+
+                if err != nil {
+                    quit <- nil
+                    return err
+                }
+                continue
+            }
+
+            if b {
+                err = replyPrimeImpl(tweets, n, "prime number", mention)
+            } else {
+                err = replyPrimeImpl(tweets, n, "composite number", mention)
+            }
+            if err != nil {
+                quit <- nil
+                return err
+            }
+        }
+        if len(mentions) > 0 {
+            lastReplyID = mentions[len(mentions)-1].ID + 1
+        }
+        time.Sleep(10 * time.Minute)
+    }
+}
+
 func replyPrimeImpl(replies chan *PNTweet, n *big.Int, result string, tweet twitter.Tweet) error {
     var text string
 
     pnText := n.Text(10)
 
     for {
-        bytes, err := json.Marshal(Response{
-            Method: "isPrime",
-            Params: pnText,
-            Result: result,
-        })
-
-        if err != nil {
-            return err
-        }
-
-        text = fmt.Sprintf("@%s %s", tweet.User.ScreenName, string(bytes))
-        log.Printf("%v %v", text, len(text))
+        text = fmt.Sprintf("@%s %v: %s", tweet.User.ScreenName, n, result)
+        log.Printf("%s %d", text, len(text))
         if len(text) <= maxTweetCharactors {
             break
         }
@@ -474,7 +472,7 @@ func replyPrimeImpl(replies chan *PNTweet, n *big.Int, result string, tweet twit
             InReplyToStatusID: tweet.ID,
         },
     }
-    time.Sleep(10 * time.Second)
+    time.Sleep(1 * time.Second)
     return nil
 }
 
