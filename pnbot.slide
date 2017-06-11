@@ -4,9 +4,11 @@ GoでTwitter bot を作ってみた🐤
 
 Tooru Takahashi
 
-@dpnbot
-@tpnbot
-@_pnbot
+@tooru
+
+https://github.com/tooru/pnbot
+
+
 
 * 話すこと
 
@@ -60,7 +62,7 @@ Twitter APIを叩くアプリを登録し、API Key等を入手
 
 .code -numbers slide/tweet.go
 
-⚠️APIキーはハードコードは危険です。別ファイル等から取得しましょう。
+⚠️APIキーのハードコードは危険です。別ファイル等から取得しましょう。
 
 * GoでのTwitter Botの作り方 3/3 応答型 (ざっくりと)
 
@@ -88,8 +90,9 @@ Twitter APIを叩くアプリを登録し、API Key等を入手
 
 素数Bot
 
-20170607
-99999820000081
+.link https://twitter.com/dpnbot @dpnbot 素数を順番につぶやく
+.link https://twitter.com/tpnbot @tpnbot 双子素数を順番につぶやく
+.link https://twitter.com/ipnbot @ipnbot @ipnbotに数字をリプライすると、素数かどうかリプライする
 
 * やってみて所感
 
@@ -107,11 +110,11 @@ immutableではないので扱いに注意が必要
  // 例:足し算 (a += b)
  a.Add(a, b)
 
-🔷素数オンメモリの限界
-OOM Killerがやってくる。永続化方法を検討しないと、いずれbot継続できない
-
+🔷素数判定オンメモリの限界
+OOM Killerがやってくる。永続化方法を検討しないと、いずれbot継続できなくなる。
+素数判定は、それ以下の全ての素数で割り切れないことを調べる必要あり。高速化のため素数をキャッシュしている。
 
 * まとめ
 
-- Golang楽しい
 - Bot楽しい
+- Golang楽しい
