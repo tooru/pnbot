@@ -230,17 +230,18 @@ func (pnbot *PNBot) startTwin() error {
 }
 
 func (pnbot *PNBot) lastTweet() (lastTweet string, err error) {
-    params := twitter.HomeTimelineParams{
+    params := twitter.UserTimelineParams{
         SinceID: 0,
     }
 
-    tweets, _, err := pnbot.client.Timelines.HomeTimeline(&params)
+    tweets, _, err := pnbot.client.Timelines.UserTimeline(&params)
     if err != nil {
         log.Printf("lastTweet: %v\n", err)
         return "", err
     }
 
     if len(tweets) == 0 {
+        log.Printf("lastTweet:len=0\n")
         return "", nil
     }
 
