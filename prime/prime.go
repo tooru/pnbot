@@ -23,6 +23,8 @@ var big3 = big.NewInt(3)
 var bTrue  = []byte{byte(1)}
 var bFalse = []byte{byte(0)}
 
+var maxCacheNumber = big.NewInt(1000 * 1000)
+
 type Prime struct {
     i *big.Int
     cur *big.Int
@@ -156,8 +158,10 @@ func (prime *Prime) next(expire time.Time) (next *big.Int, err error) {
 
     //log.Printf("nextPrime:%v", p)
     
-    if err := pdb.addNextPrime(p); err != nil {
-        panic("") //return nil, err
+    if p.Cmp(maxCacheNumber) < 0 {
+        if err := pdb.addNextPrime(p); err != nil {
+            panic("") //return nil, err
+        }
     }
     prime.cur = p
     prime.i.Add(prime.i, big1)
@@ -169,7 +173,6 @@ type primeDB struct {
     mutex sync.Mutex
 
     primes []*big.Int
-    sparsePrimes []*big.Int
 }
 
 func newPrimeDB() *primeDB {
@@ -178,7 +181,6 @@ func newPrimeDB() *primeDB {
             big.NewInt(2),
             big.NewInt(3),
         },
-        sparsePrimes: []*big.Int{},
     }
 }
 
@@ -208,13 +210,6 @@ func (pdb *primeDB) addNextPrime(prime *big.Int) error {
     pdb.primes = append(pdb.primes, prime)
     printSlice(pdb.primes)
 
-    i := sort.Search(len(pdb.sparsePrimes), func(i int) bool {
-        return pdb.sparsePrimes[i].Cmp(prime) >= 0
-    })
-    if i > 0 {
-        pdb.sparsePrimes = pdb.sparsePrimes[i+1:]
-    }
-
     return nil
 }
 
@@ -241,16 +236,6 @@ func (pdb *primeDB) addPrime(prime *big.Int) error {
 
     if last(pdb.primes).Cmp(prime) >= 0 {
         return nil
-    }
-
-    i := sort.Search(len(pdb.sparsePrimes), func(i int) bool {
-        return pdb.sparsePrimes[i].Cmp(prime) >= 0
-    })
-
-    if i == len(pdb.sparsePrimes) {
-        pdb.sparsePrimes = append(pdb.sparsePrimes, prime)
-    } else if pdb.sparsePrimes[i].Cmp(prime) > 0 {
-        pdb.sparsePrimes = append(pdb.sparsePrimes[:i], append([]*big.Int{prime}, pdb.sparsePrimes[i:]...)...)
     }
 
     return nil
