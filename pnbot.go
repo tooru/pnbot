@@ -360,7 +360,7 @@ func (pnbot *PNBot) startPrimeP() error {
 }
 
 func (pnbot *PNBot) lastReplyID() (lastReplyID int64, err error) {
-    params := twitter.HomeTimelineParams{
+    params := twitter.UserTimelineParams{
         Count: 200,
         SinceID: 0,
     }
@@ -368,7 +368,7 @@ func (pnbot *PNBot) lastReplyID() (lastReplyID int64, err error) {
     n := 0
 
     for {
-        tweets, _, err := pnbot.client.Timelines.HomeTimeline(&params)
+        tweets, _, err := pnbot.client.Timelines.UserTimeline(&params)
         if err != nil {
             log.Printf("lastReplyiD: %v\n", err)
             time.Sleep(time.Minute)
@@ -395,6 +395,13 @@ func (pnbot *PNBot) lastReplyID() (lastReplyID int64, err error) {
 func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReplyID int64) error {
     var prevID int64 = -1
     var id int64 = lastReplyID + 1
+
+    var mentionInterval time.Duration = 10 * time.Second
+    var totalCount int = 0;
+    var count int = 0;
+
+    var retry int = 0
+
     for {
         if prevID != id {
             log.Printf("lastReplyID: %d", id)
@@ -403,11 +410,22 @@ func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReply
             SinceID: id,
         }
         mentions := []twitter.Tweet{}
+        retry = 0
         for {
             ms, _, err := pnbot.client.Timelines.MentionTimeline(&params)
 
             if err != nil {
-                return err
+                if retry >= maxRetry {
+                    quit <- nil
+                    return fmt.Errorf("Too many tweet error: %v\n", err)
+                }
+                log.Printf("MentionTimeline error[%d/%d]:sleep=%s: %v\n", retry+1, maxRetry, retryInterval, err)
+
+                time.Sleep(retryInterval)
+                pnbot.client = pnbot.newClient()
+                count = 0
+                retry++
+                continue
             }
             if len(ms) == 0 {
                 break
@@ -453,7 +471,11 @@ func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReply
         if len(mentions) > 0 {
             id = mentions[len(mentions)-1].ID + 1
         }
-        time.Sleep(10 * time.Second)
+        count++
+        totalCount++
+
+        log.Printf("Sleep %v:count=%d:totalCount=%d", mentionInterval, count, totalCount)
+        time.Sleep(mentionInterval)
     }
 }
 
