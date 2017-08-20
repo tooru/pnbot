@@ -17,9 +17,6 @@ import (
 //    "github.com/davecgh/go-spew/spew"
 )
 
-// 187 Status is a duplicate.
-// 185 User is over daily status update limit.
-
 const (
     maxTweetCharactors = 140
     hellipsis = "\u2026"
@@ -28,6 +25,9 @@ const (
     maxRetry = 100
     retryInterval = 10 * time.Minute
     interval = 1 * time.Second
+
+    errorUserIsOverDailyStatusUpdateLimit = 185
+    errorStatusIsADuplicate = 187
 )
 
 func main() {
@@ -147,6 +147,20 @@ func (pnbot *PNBot) tweet(tweets chan *PNTweet, quit chan interface{}) error {
             if err == nil {
                 break
             }
+            v, ok := err.(twitter.APIError)
+            if ok {
+                if len(v.Errors) == 0 {
+                    return fmt.Errorf("Unknown Error:len(Errors)=0: %v\n", err)
+                }
+                errDetail := v.Errors[0]
+                if errDetail.Code == errorStatusIsADuplicate {
+                    log.Printf(err.Error())
+                    break
+                } else if errDetail.Code != errorUserIsOverDailyStatusUpdateLimit {
+                    return fmt.Errorf("Unknown Error:len(Errors)=0: %v\n", err)
+                }
+            }
+
             if retry >= maxRetry {
                 return fmt.Errorf("Too many tweet error: %v\n", err)
             }
