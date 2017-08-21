@@ -1,13 +1,13 @@
 package prime
 
 import (
-    //"log"
+//    "log"
     "math/big"
     "testing"
     "github.com/stretchr/testify/assert"
 )
 
-func _TestIsPrime(t *testing.T) {
+func TestIsPrime(t *testing.T) {
 
     primes := []int{
         2,
@@ -1244,7 +1244,7 @@ func _TestIsPrime(t *testing.T) {
 
     prime := NewPrime()
 
-    for i, j := -1, 0; i < len(primes); i++ {
+    for i, j := -1, 0; i < primes[len(primes) - 1]; i++ {
         ab, err := prime.IsPrime(big.NewInt(int64(i)))
 
         if _, ok := err.(error); ok {
@@ -1323,4 +1323,3 @@ func TestNext(t *testing.T) {
         prev = p
     }
 }
-
