@@ -2,6 +2,7 @@ package prime
 
 import (
     "errors"
+    "log"
     "math/big"
     "sort"
     "sync"
@@ -32,53 +33,28 @@ func NewPrime() *Prime {
         },
         maxPrime: big.NewInt(2),
     }
-    //prime.start()
+    go prime.start()
 
     return prime
 }
 
 func (prime *Prime) start() {
-    ch := make(chan *big.Int)
-    go generate(ch)
-
-    for {
-        p := <- ch
-        if p == nil {
-            break
-        }
-
-        prime.mutex.Lock()
-        prime.primes = append(prime.primes, p)
-        prime.mutex.Unlock()
-
-        ch1 := make(chan *big.Int)
-        go filter(ch, ch1, p)
-        ch = ch1
-    }
-}
-
-func generate(ch chan *big.Int) {
     for p := big.NewInt(3); p.Cmp(maxCacheNumber) < 0; {
-        q := newInt(p)
-        q.Add(p, big2)
-        p = q
+        p.Add(p, big2)
 
-        ch <- p
-    }
-    ch <- nil
-}
+        b, err := prime.isPrime(p, time.Now().Add(timeout))
 
-func filter(in <- chan *big.Int, out chan <- *big.Int, prime *big.Int) {
-    for {
-        i := <- in
-        if i == nil {
-            out <- nil
-            break
+        if err != nil {
+            log.Printf("%v", err)
+            return
         }
-        r := new(big.Int)
-        if r.Mod(i, prime).Cmp(big0) != 0 {
-            out <- i
+
+        if !b {
+            continue
         }
+        prime.mutex.Lock()
+        prime.primes = append(prime.primes, newInt(p))
+        prime.mutex.Unlock()
     }
 }
 
@@ -100,7 +76,7 @@ func (prime *Prime) Next() (*big.Int, error) {
     if lastPrime.Cmp(prime.maxPrime) > 0 {
         prime.maxPrime = newInt(lastPrime)
     }
-    q := prime.maxPrime
+    q := newInt(prime.maxPrime)
     q.Add(q, big2)
     for {
         b, err := prime.isPrime(q, expire)
@@ -108,6 +84,8 @@ func (prime *Prime) Next() (*big.Int, error) {
             return nil, err
         }
         if b {
+            prime.maxPrime = q
+            prime.index++
             return newInt(q), nil
         }
         q.Add(q, big2)

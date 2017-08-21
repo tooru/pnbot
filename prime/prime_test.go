@@ -1,7 +1,7 @@
 package prime
 
 import (
-//    "log"
+    "log"
     "math/big"
     "testing"
     "github.com/stretchr/testify/assert"
@@ -1282,7 +1282,7 @@ func assertPrime(t *testing.T, prime *Prime, expected bool, n *big.Int) {
     }
 
     assert.Equal(t, expected, b)
-}    
+}
 
 func TestNext(t *testing.T) {
     prime := NewPrime()
@@ -1314,8 +1314,8 @@ func TestNext(t *testing.T) {
                 assert.Fail(t, "error: isPrime: %v", err)
                 return
             }
-            //log.Printf(" skip: %v: %v\n", j, b)
             if b {
+                log.Printf("%v:%v:%v\n", p, prev, j)
                 panic("prime?")
             }
             assert.Equal(t, false, b)
