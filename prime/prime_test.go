@@ -1,13 +1,13 @@
 package prime
 
 import (
-    //"log"
+    "log"
     "math/big"
     "testing"
     "github.com/stretchr/testify/assert"
 )
 
-func _TestIsPrime(t *testing.T) {
+func TestIsPrime(t *testing.T) {
 
     primes := []int{
         2,
@@ -1244,7 +1244,7 @@ func _TestIsPrime(t *testing.T) {
 
     prime := NewPrime()
 
-    for i, j := -1, 0; i < len(primes); i++ {
+    for i, j := -1, 0; i < primes[len(primes) - 1]; i++ {
         ab, err := prime.IsPrime(big.NewInt(int64(i)))
 
         if _, ok := err.(error); ok {
@@ -1269,8 +1269,8 @@ func TestIsPrimeLargeNumber(t *testing.T) {
     prime := NewPrime()
 
     assertPrime(t, prime, true, big.NewInt(9973))
-    //assertPrime(t, prime, false, big.NewInt(1134211291487)) // 1098481 * 1032527
-    //assertPrime(t, prime, false, big.NewInt(99999820000081)) // 9999991 * 9999991
+    assertPrime(t, prime, false, big.NewInt(1134211291487)) // 1098481 * 1032527
+    assertPrime(t, prime, false, big.NewInt(99999820000081)) // 9999991 * 9999991
 }
 
 
@@ -1282,7 +1282,7 @@ func assertPrime(t *testing.T, prime *Prime, expected bool, n *big.Int) {
     }
 
     assert.Equal(t, expected, b)
-}    
+}
 
 func TestNext(t *testing.T) {
     prime := NewPrime()
@@ -1314,8 +1314,8 @@ func TestNext(t *testing.T) {
                 assert.Fail(t, "error: isPrime: %v", err)
                 return
             }
-            //log.Printf(" skip: %v: %v\n", j, b)
             if b {
+                log.Printf("%v:%v:%v\n", p, prev, j)
                 panic("prime?")
             }
             assert.Equal(t, false, b)
@@ -1323,4 +1323,3 @@ func TestNext(t *testing.T) {
         prev = p
     }
 }
-
