@@ -1,5 +1,7 @@
 # pnbot
 
+[![Build Status](https://travis-ci.org/tooru/pnbot.svg?branch=use-travis-ci)](https://travis-ci.org/tooru/pnbot)
+
 Prime Number bot
 
 ## Bots
