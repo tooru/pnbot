@@ -1,4 +1,4 @@
-package prime
+package main
 
 import (
     "errors"
@@ -10,7 +10,7 @@ import (
 )
 
 const (
-    timeout = 5 * time.Second
+    timeout = 20 * time.Second
 )
 
 var big0 = big.NewInt(0)
