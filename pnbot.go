@@ -11,10 +11,8 @@ import (
     "time"
     "unicode"
 
-    "github.com/tooru/pnbot/prime"
     "github.com/dghubble/go-twitter/twitter"
     "github.com/dghubble/oauth1"
-//    "github.com/davecgh/go-spew/spew"
 )
 
 const (
@@ -67,7 +65,7 @@ func NewPNBot(mode *string, target *string, debug bool,
         consumerSecret: consumerSecret,
         accessToken: accessToken,
         accessSecret: accessSecret,
-        prime: prime.NewPrime(),
+        prime: NewPrime(),
     }
 
     return pnbot
@@ -83,7 +81,7 @@ type PNBot struct {
     accessToken *string
     accessSecret *string
 
-    prime *prime.Prime
+    prime *Prime
 
     client *twitter.Client
 
