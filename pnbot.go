@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/dghubble/go-twitter/twitter"
 	"github.com/dghubble/oauth1"
@@ -452,6 +453,7 @@ func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReply
 			if !ok {
 				continue
 			}
+			log.Fatalf("parsedTweet: %d", n)
 
 			b, err := pnbot.prime.IsPrime(n)
 			if err != nil {
@@ -517,31 +519,60 @@ func parseTweet(tweet twitter.Tweet) (*big.Int, bool) {
 	text := tweet.Text
 	i := 0
 
-	log.Printf("'%s' ", text)
+	log.Printf("'text=%s' ", text)
 
 	for _, indices := range getEntityIndices(&tweet) {
 		if i == indices.Start() {
+			text = skipString(text, i, indices.End())
 			i = indices.End()
 			continue
 		}
-		str := text[i:indices.Start()]
-		log.Printf("'%s'\n", str)
+		str := subString(text, i, indices.Start())
+		log.Printf("'i=%d,start=%d,str=%s'\n", i, indices.Start(), str)
 		if n, ok := parseNumber(str); ok {
 			return n, true
 		}
+		text = skipString(text, i, indices.End())
 		i = indices.End()
 	}
 
-	if i < len(text) {
-		str := text[i:]
-		log.Printf("'%s'\n", str)
-		if n, ok := parseNumber(str); ok {
+	if len(text) > 0 {
+		log.Printf("'text=%s'\n", text)
+		if n, ok := parseNumber(text); ok {
 			return n, true
 		}
 	}
 
 	log.Printf("ignored\n")
 	return nil, false
+}
+
+func skipString(text string, start int, end int) string {
+	skip := end - start
+
+	for i, w, c := 0, 0, 0; i < len(text); i += w {
+		_, width := utf8.DecodeRuneInString(text[i:])
+		w = width
+		c++
+		if c >= skip {
+			return text[i+w:]
+		}
+	}
+	return ""
+}
+
+func subString(text string, start int, end int) string {
+	length := end - start
+
+	for i, w, c := 0, 0, 0; i < len(text); i += w {
+		_, width := utf8.DecodeRuneInString(text[i:])
+		w = width
+		c++
+		if c >= length {
+			return text[0 : i+w]
+		}
+	}
+	return ""
 }
 
 func parseNumber(str string) (*big.Int, bool) {
