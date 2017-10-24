@@ -453,7 +453,7 @@ func (pnbot *PNBot) reply(tweets chan *PNTweet, quit chan interface{}, lastReply
 			if !ok {
 				continue
 			}
-			log.Fatalf("parsedTweet: %d", n)
+			log.Printf("parsedTweet: %d", n)
 
 			b, err := pnbot.prime.IsPrime(n)
 			if err != nil {
