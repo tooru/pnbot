@@ -1,6 +1,7 @@
 # pnbot
 
 [![Build Status](https://travis-ci.org/tooru/pnbot.svg?branch=use-travis-ci)](https://travis-ci.org/tooru/pnbot)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tooru/pnbot)](https://goreportcard.com/report/github.com/tooru/pnbot)
 
 Prime Number bot
 
