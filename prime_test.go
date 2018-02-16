@@ -1,10 +1,12 @@
 package main
 
 import (
-	"github.com/stretchr/testify/assert"
+	"fmt"
 	"log"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIsPrime(t *testing.T) {
@@ -1247,7 +1249,7 @@ func TestIsPrime(t *testing.T) {
 		ab, err := prime.IsPrime(big.NewInt(int64(i)))
 
 		if _, ok := err.(error); ok {
-			assert.Fail(t, "error: isPrime: %v", err)
+			assert.Fail(t, fmt.Sprintf("error: isPrime: %v", err))
 		}
 
 		eb := primes[j] == i
@@ -1276,7 +1278,7 @@ func assertPrime(t *testing.T, prime *Prime, expected bool, n *big.Int) {
 	b, err := prime.IsPrime(n)
 
 	if err != nil {
-		assert.Fail(t, "error: isPrime: %v", err)
+		assert.Fail(t, fmt.Sprintf("error: isPrime: %v", err))
 	}
 
 	assert.Equal(t, expected, b)
@@ -1292,14 +1294,14 @@ func TestNext(t *testing.T) {
 
 		//log.Printf("next %v\n", p)
 		if err != nil {
-			assert.Fail(t, "error: isPrime: %v", err)
+			assert.Fail(t, fmt.Sprintf("error: isPrime: %v", err))
 			return
 		}
 		assert.Equal(t, true, prev.Cmp(p) < 0)
 
 		b, err := prime.IsPrime(p)
 		if err != nil {
-			assert.Fail(t, "error: isPrime: %v", err)
+			assert.Fail(t, fmt.Sprintf("error: isPrime: %v", err))
 			return
 		}
 		assert.Equal(t, true, b)
@@ -1309,7 +1311,7 @@ func TestNext(t *testing.T) {
 		for ; j.Cmp(p) < 0; j.Add(j, one) {
 			b, err := prime.IsPrime(j)
 			if err != nil {
-				assert.Fail(t, "error: isPrime: %v", err)
+				assert.Fail(t, fmt.Sprintf("error: isPrime: %v", err))
 				return
 			}
 			if b {
