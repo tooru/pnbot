@@ -1,0 +1,103 @@
+Travis CIでGoのビルドが失敗したので直してもらった話
+第5回Java・Go研修OB・OG懇親会
+30 Jun 2018
+
+Tooru Takahashi
+
+@tooru
+
+https://github.com/tooru/pnbot
+
+
+
+* 話すこと
+
+- 自己紹介
+- 素数bot
+- Travis CIビルド失敗が続く
+- 原因調査＆PRそして...
+- まとめ
+
+* 自己紹介
+
+- 高橋 透　と申します
+- Java研修第6期生
+- 某社にてソフト開発してます
+- 横浜Go読書会に参加しています
+- 読書会でたまにLTしてます
+
+.link https://go-talks.appspot.com/github.com/tooru/pnbot/pnbot.slide 横浜Go#7 LT：GoでTwitter bot を作ってみた🐤
+.link https://go-talks.appspot.com/github.com/tooru/gopl-popcount/popcount.slide 横浜Go#12 LT：PopCountがGo1.7からあまりに早くなったので調べてみた
+.link https://go-talks.appspot.com/github.com/tooru/slide-go-assignable/go-assignable.slide 横浜Go#15 LT：Goのインタフェースと代入
+
+* 素数bot 紹介
+
+- 横浜Go読書会でプログラミング言語Goを読んでたので、Goの練習がてら作成した
+- Twitterに素数をひたすらつぶやくbotです (つぶやき始めてから1年くらい経った)
+.link https://twitter.com/dpnbot 素数をひたすらつぶやくbot
+.link https://twitter.com/tpnbot 双子素数をひたすらつぶやくbot
+.link https://twitter.com/ipnbot mention送ると素数かどうか教えてくれるbot
+
+💡 1年で得たあまり役に立たないノウハウ
+
+- Twitter投稿制限があるので連投botはリトライ処理が必要
+- なんかフォローしてる人がいる。平均2,500 tweets/dayなんですけど。
+- 外国人からたまに素数が「いいね❤️」される
+- マイナーながら世界には素数ファンがいるらしい🤤
+
+* Travis CIビルド失敗が続く
+
+- こんなbotですが、一応Travis CIしてました。
+- ただ、[[https://travis-ci.org/tooru/pnbot/builds][ここ1ヶ月ビルドが失敗]]してましたが、時間が取れず放置してました。
+
+.image slide/pnbot-travis.png
+
+
+- Travis CIではGoの各バージョンを指定してビルドができます
+- いずれも `Go1.x` のビルドで失敗。 [[https://docs.travis-ci.com/user/languages/go/#Specifying-a-Go-version-to-use][Go1.xはGo1.x系の最新リリース版]]のような意味
+
+# CIはテストと最新のGoで動くかどうかの確認のため
+
+
+* 原因調査＆PRそして...
+
+- 同じく困っている人がいたが、2週間くらい放置されていた
+.link https://github.com/travis-ci/travis-ci/issues/9725 travis-ci #9725 build for golang 1.x doesn't use go get -t to pull test dependencies
+
+- この辺を読む (Travis CIはRubyで書かれている)
+
+.link https://github.com/travis-ci/travis-build/blob/master/lib/travis/build/script/go.rb travis-build/lib/travis/build/script/go.rb
+
+- Travis CIは、Go1.2以降 `go` `get` に `-t` オプションをつけるが、 ビルドが失敗した頃から `1.x` では付いていない。
+- ビルドが失敗する前は、1.x→1.10.1のようなマッピングを持って変換していたが、それをやめたらしい。どうもそれのデグレのようである。
+
+- マッピングをやめたことで、"1.x"と"1.2"を比較するが、バージョン比較に `Gem::Version` を使っているため "1.2"が大きい（新しい）と判断される。
+
+- 原因判明→Pull Request送信 (注意：英語ニガテ)
+
+* そして...
+
+- PRに反応してもう1人が別のPRを出す(デグレのコミットを戻すPR)
+
+.link https://github.com/travis-ci/travis-build/pull/1416 Revert "Remove golang/gimme aliases" #1416
+
+- 翌日、Travisの中の人がPRを発行
+
+.link https://github.com/travis-ci/travis-build/pull/1421 Fix go build command for go 1.x #1421
+
+
+- 追PRの人と私、中の人の修正がいい感じなので、PRを取り下げる。
+- 中の人のPR、本線に取り込まれる
+
+- [[https://travis-ci.org/tooru/pnbot/builds/397791238][素数botのCI]]はGreenに✅
+
+.image slide/pnbot-travis-fixed.png
+
+- めでたしめでたし
+
+
+* まとめ
+
+- PRは取り込まれなかったが、放置されたissueを解決するきっかけを作れたのはよかった。
+- Goに少し貢献できたかな？
+- みなさんもOSSに積極的に貢献していきましょう。してますよね。
