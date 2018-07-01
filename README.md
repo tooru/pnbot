@@ -14,3 +14,4 @@ Prime Number bot
 ## Slide
 
 * https://go-talks.appspot.com/github.com/tooru/pnbot/pnbot.slide (japanese)
+* https://go-talks.appspot.com/github.com/tooru/pnbot/pnbot2.slide (japanese)
